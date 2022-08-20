@@ -4,9 +4,14 @@ This repository contains TypeScript implementation of the Nitrokey Webcrypt clie
 along with a Vue demo application using it, available at:
 - https://webcrypt.nitrokey.com/
 
+See following for more information:
+- https://github.com/Nitrokey/nitrokey-webcrypt
+- https://github.com/Nitrokey/nitrokey-webcrypt-tests
+- https://github.com/Nitrokey/nitrokey-webcrypt-usbip
+
 ![Main screen image](screen.png)
 
-### Implemented Operations
+### Implemented Operations in the Demo Application
 - session management (Login and Logout)
 - key generation (random);
 - key generation from seed;
@@ -24,7 +29,7 @@ Note: all data are presented hexadecimal.
 
 ### Custom Calls
 Using `Custom` tab it is possible to send to device any API command.
-Default PIN set by `RESET AND LOGIN` is "123123", however one can run `FACTORY_RESET` command, and set own and login with 
+Default PIN set by `RESET AND LOGIN` is `123123`, however one can run `FACTORY_RESET` command through the `Custom` tab, and set own and login with
 `SET_PIN` and `LOGIN` commands respectively.
 
 For the fields marked as `:bytes` please enter data in hexadecimal format, and regular text for fields marked as `:string`.
@@ -33,6 +38,10 @@ For the fields marked as `:bytes` please enter data in hexadecimal format, and r
 The `TEST` button calls all API commands to check for the correctness of its implementation. 
 These tests are not exhaustive (that is realized by the Python test suite), but mostly test "happy paths". 
 
+
+### Nitrokey Webcrypt API Documentation
+
+See [Use Cases](./docs/use-cases.md).
 
 ## Project setup
 ```
