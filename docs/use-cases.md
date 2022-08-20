@@ -4,6 +4,9 @@ All the Nitrokey Webcrypt API functions reside in the `js/webcrypt.ts` file, thu
 
 The actual usage can be seen in the `WebcryptTests()` function from the `js/tests.ts` file, or as used in the demo application - `src/components/NitrokeyWebcryptDemo.vue`.
 
+For details about the API and the exact implementation of the functions please see:
+- https://github.com/Nitrokey/nitrokey-webcrypt/blob/master/implementation.md
+
 ## Factory Reset and Setup
 Usually it suffices to call `Login` command to establish a session. In case the Nitrokey Webcrypt was not used before, it requires setting a PIN with `SetPin` command. For cases, where user has lost his PIN and/or used all attempts via attempts counter, the device has to be factory reset with a `Webcrypt_FactoryReset` command.
 ```typescript
