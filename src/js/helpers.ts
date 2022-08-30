@@ -160,3 +160,92 @@ export function delay(ms: number) {
 export function get_hash(o: string) {
     return sha256(o);
 }
+
+export async function generate_key_ecc(): Promise<CryptoKeyPair> {
+    const algorithm = {
+        name: "ECDH",
+        namedCurve: "P-256",
+    };
+    return await window.crypto.subtle.generateKey(
+        algorithm,
+        true,
+        ["deriveKey"]
+    ) as CryptoKeyPair ;
+}
+
+export async function agree_on_key(privateKey: CryptoKey, publicKey: CryptoKey) {
+    return window.crypto.subtle.deriveKey(
+        {
+            name: "ECDH",
+            public: publicKey
+        },
+        privateKey,
+        {
+            name: "AES-CBC",
+            length: 256
+        },
+        false,
+        ["encrypt", "decrypt"]
+    );
+}
+
+export async function encode_text(text:string) : Promise<Uint8Array> {
+    return new TextEncoder().encode(text);
+}
+
+export async function encrypt_aes(key:CryptoKey, data:Uint8Array): Promise<ArrayBuffer> {
+    const encoded = data;
+    const iv = new Uint8Array(16).fill(0);
+    return window.crypto.subtle.encrypt(
+        {
+            name: "AES-CBC",
+            iv: iv,
+            length: 256,
+        },
+        key,
+        encoded,
+    );
+}
+
+export async function calculate_hmac(key:CryptoKey, data:Uint8Array) {
+    return await window.crypto.subtle.sign(
+        "HMAC",
+        key,
+        data
+    );
+}
+
+export async function number_to_short(n:number): Promise<ArrayBuffer> {
+    const buffer = new ArrayBuffer(2);
+    const dataView = new DataView(buffer);
+    dataView.setInt16(0, n, true);
+    return dataView.buffer;
+}
+
+export async function import_key(data:Uint8Array):Promise<CryptoKey> {
+    const algorithm = {
+        name: "ECDSA",
+        hash: {name: "SHA-256"},
+        namedCurve: "P-256",
+    };
+    return await crypto.subtle.importKey(
+        'raw',
+        data,
+        algorithm,
+        false,
+        // ["deriveKey"]
+        ["verify"]
+    );
+}
+
+export async function export_key(key: CryptoKey): Promise<Uint8Array> {
+    const exported = await window.crypto.subtle.exportKey(
+        "raw",
+        key
+    );
+    return new Uint8Array(exported);
+}
+
+export function buffer_to_uint8(buf: ArrayBuffer) {
+    return new Uint8Array(buf as ArrayBuffer);
+}

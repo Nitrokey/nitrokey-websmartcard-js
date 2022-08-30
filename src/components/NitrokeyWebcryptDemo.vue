@@ -64,19 +64,32 @@
             <button @click="signData" :disabled="!logged_in || !KEYHANDLE">SIGN DATA</button>
 
           </b-tab>
-<!--          <b-tab title="Decrypt">-->
-<!--            <p>Data decryption</p>-->
-<!--          </b-tab>-->
-<!--          <b-tab title="Test"><p>Test and status</p></b-tab>-->
+          <b-tab title="Encrypt">
+            <p>Data encryption</p>
+
+            <b-form-input v-model="encryptText" placeholder="Enter data to encrypt"></b-form-input>
+            <b-form-input v-model="encryptTextResult" placeholder="Here will be encryption result"></b-form-input>
+            <button @click="encryptData" :disabled="!KEYHANDLE">ENCRYPT DATA</button>
+
+          </b-tab>
+          <b-tab title="Decrypt">
+            <p>Data decryption</p>
+
+            <b-form-input v-model="decryptText" placeholder="Enter data to decrypt"></b-form-input>
+            <button @click="decryptData" :disabled="!logged_in || !KEYHANDLE">DECRYPT DATA</button>
+
+
+          </b-tab>
+          <!--          <b-tab title="Test"><p>Test and status</p></b-tab>-->
 
           <b-tab title="Custom">
             <p>Custom commands</p>
             <b-form id="custom_cmd_form" @submit="execute_custom_command" @submit.stop.prevent>
-             <b-form-select v-model="selected"  :options="commands" />
+              <b-form-select v-model="selected" :options="commands"/>
 
-              <div v-for="p of params" >
+              <div v-for="p of params">
                 <b-form-input :placeholder=p.placeholder :name=p.name
-                               v-model="custom_cmd_form[p.name]" ></b-form-input>
+                              v-model="custom_cmd_form[p.name]"></b-form-input>
               </div>
 <!--            <button @click="execute_custom_command">Execute</button>-->
               <b-button type="submit" variant="primary">Execute</b-button>
@@ -92,7 +105,7 @@
           <b-tab title="Console">
             <p>Console data</p>
 
-<!--            <b-progress :value="value" :max="max" show-progress animated></b-progress>-->
+            <!--            <b-progress :value="value" :max="max" show-progress animated></b-progress>-->
             <button @click="clear_console">Clear</button>
             <b-progress-bar v-model="progress.value" :max="progress.max" variant="success" show-progress show-value></b-progress-bar>
             <b-form-textarea
@@ -114,31 +127,43 @@
 
 <script lang="ts">
 import {Component, Prop, Vue} from 'vue-property-decorator';
-import {WEBCRYPT_GENERATE, WEBCRYPT_GENERATE_FROM_DATA, WEBCRYPT_SIGN,} from "@/js/webcrypt";
-import {byteToHexString, clone_object, dict_binval, dict_empty, dict_hexval, hexStringToByte, keys} from "@/js/helpers";
+import {
+  CommandLoginParams,
+  CommandSetPinParams,
+  Webcrypt_FactoryReset,
+  WEBCRYPT_GENERATE,
+  WEBCRYPT_GENERATE_FROM_DATA,
+  Webcrypt_Login,
+  Webcrypt_Logout,
+  Webcrypt_SetPin,
+  WEBCRYPT_SIGN,
+} from "@/js/webcrypt";
+import {
+  agree_on_key, buffer_to_uint8,
+  byteToHexString, calculate_hmac,
+  clone_object,
+  dict_binval,
+  dict_empty,
+  dict_hexval, encode_text, encrypt_aes, export_key, flatten,
+  generate_key_ecc,
+  hexStringToByte, import_key,
+  keys, number_to_short
+} from "@/js/helpers";
 import {sha256} from "js-sha256";
 import {send_command} from "@/js/transport";
 import {commands_parameters, string_to_command} from "@/js/constants";
 import {Session} from "@/js/session";
 import {Dictionary} from "@/js/types";
 import {log_fn} from "@/js/logs";
-import {
-  CommandLoginParams,
-  CommandSetPinParams,
-  Webcrypt_FactoryReset,
-  Webcrypt_Login,
-  Webcrypt_Logout,
-  Webcrypt_SetPin
-} from "@/js/webcrypt";
 import {WebcryptTests} from "@/js/tests";
 
 
-function keys_to_options(keys_list:any):any{
+function keys_to_options(keys_list: any): any {
   let a = [];
-  a.push(Object.freeze({ value: null, text: 'Please select an option' }  ));
-  for (const k in keys_list){
+  a.push(Object.freeze({value: null, text: 'Please select an option'}));
+  for (const k in keys_list) {
     const s = keys_list[k];
-    a.push(Object.freeze({ value: s, text: s }  ));
+    a.push(Object.freeze({value: s, text: s}));
   }
   // console.log(a);
   return a;
@@ -164,6 +189,9 @@ export default class NitrokeyWebcryptDemo extends Vue {
   active_tab = 0;
   progress = {value: 0, max: 100};
   logged_in = "";
+  encryptText = "";
+  encryptTextResult = "";
+  decryptText = "";
 
   get params() {
     if (this.selected === null) {
@@ -290,8 +318,45 @@ export default class NitrokeyWebcryptDemo extends Vue {
     this.signature = sign;
   }
 
+  async encryptData(): Promise<void> {
+    // const publicKey = await crypto.subtle.importKey();
+    // 1. Generate ECC key
+    // 2. Agree on a shared secret with the keyhandle's public key
+    // 3. Encrypt data with the shared secret AES-256
+    // 4. Calculate HMAC
+    // 5. Pack it or provide in separate fields.
 
-  async execute_custom_command(event: Event){
+    const plaintext = await encode_text(this.encryptText);
+    const pubkey_raw = hexStringToByte(this.PUBKEY);
+    const pubkey = await import_key(pubkey_raw);
+    const keyhandle = hexStringToByte(this.KEYHANDLE);
+    const ephereal_keypair = await generate_key_ecc();
+    const ephereal_pubkey = ephereal_keypair.publicKey;
+    const ephereal_pubkey_raw = await export_key(ephereal_pubkey);
+    const aes_key = await agree_on_key(ephereal_keypair.privateKey, pubkey);
+    const ciphertext = await encrypt_aes(aes_key, plaintext);
+    const ciphertext_len = await number_to_short(ciphertext.byteLength);
+    // TODO: DESIGN derive different keys for hmac and encryption
+    const hmac = await calculate_hmac(ephereal_keypair.privateKey,
+        flatten([buffer_to_uint8(ciphertext), ephereal_pubkey_raw,
+          buffer_to_uint8(ciphertext_len), keyhandle])
+    );
+
+    const result = {
+      DATA: ciphertext,
+      KEYHANDLE: keyhandle,
+      HMAC: hmac,
+      ECCEKEY: ephereal_pubkey_raw
+    };
+
+    this.encryptTextResult = JSON.stringify(result);
+  }
+
+  async decryptData(): Promise<void> {
+    // see encryptData()
+  }
+
+  async execute_custom_command(event: Event) {
     event.preventDefault();
     if (this.selected === null) return;
     this.custom_cmd_form_reply = "PENDING";
@@ -305,8 +370,7 @@ export default class NitrokeyWebcryptDemo extends Vue {
     const session = new Session();
     try {
       res = await send_command(session, command, data_to_send, log_fn);
-    }
-    catch (e) {
+    } catch (e) {
       this.custom_cmd_form_reply = `Error: ${JSON.stringify(e)}`;
       return;
     }
