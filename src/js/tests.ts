@@ -33,7 +33,7 @@ import {
     get_hash, getBinaryStr,
     hexStringToByte,
     import_key, number_to_short, pkcs7_pad_16, remove_pkcs7_pad_16,
-    TEST
+    TEST, uint8ToUint16
 } from "@/js/helpers";
 
 class TestRecord {
@@ -82,75 +82,9 @@ export async function should_throw(logfn:Function, fn:Function, expected_str:str
 
 export async function WebcryptTests(logfn: StatusCallback, progressfn: ProgressCallback): Promise<void> {
     let progress = 0;
-    const max_progress = 21;
+    const max_progress = 23;
     await Webcrypt_FactoryReset(logfn);
     await progressfn(progress++, max_progress);
-
-    try
-    {
-        const DEFAULT_PIN = "12345678";
-        await Webcrypt_SetPin(logfn, new CommandSetPinParams(DEFAULT_PIN));
-        await progressfn(progress++, max_progress);
-        await Webcrypt_Login(logfn, new CommandLoginParams(DEFAULT_PIN));
-        await progressfn(progress++, max_progress);
-
-        const kh = await Webcrypt_GenerateKey(logfn);
-        // const encryptText = "text to encrypt";
-        // const encryptText = "text to encrypt, but even longer";
-        const encryptText = "text to encrypt, but even longer hahahaa";
-        const PUBKEY = kh.PUBKEY;
-        const KEYHANDLE = kh.KEYHANDLE;
-
-
-        const plaintext = await encode_text(encryptText);
-        const plaintext_pad = pkcs7_pad_16(plaintext);
-        const pubkey_raw = hexStringToByte(PUBKEY);
-        const pubkey = await import_key(pubkey_raw);
-        const pubkey_ecdh = await ecdsa_to_ecdh(pubkey);
-        const keyhandle = hexStringToByte(KEYHANDLE);
-        const ephereal_keypair = await generate_key_ecc();
-        const ephereal_pubkey = ephereal_keypair.publicKey;
-        const ephereal_pubkey_raw = await export_key(ephereal_pubkey);
-        const aes_key = await agree_on_key(ephereal_keypair.privateKey, pubkey_ecdh);
-        const ciphertext = await encrypt_aes(aes_key, plaintext_pad);
-        const ciphertext_len = await number_to_short(ciphertext.byteLength);
-        // TODO: DESIGN derive different keys for hmac and encryption
-        const data_to_hmac = flatten([buffer_to_uint8(ciphertext), ephereal_pubkey_raw,
-            buffer_to_uint8(ciphertext_len), keyhandle]);
-        const hmac = await calculate_hmac(aes_key, data_to_hmac);
-
-        const result = {
-            DATA: buffer_to_uint8(ciphertext),
-            KEYHANDLE: keyhandle,
-            HMAC: buffer_to_uint8(hmac),
-            ECCEKEY: ephereal_pubkey_raw
-        };
-
-        const commandDecryptParams = new CommandDecryptParams(
-            byteToHexString(buffer_to_uint8(ciphertext)),
-            byteToHexString(keyhandle),
-            byteToHexString(buffer_to_uint8(hmac)),
-            byteToHexString(ephereal_pubkey_raw)
-        );
-
-        await logfn(JSON.stringify(dict_hexval(result)));
-        await progressfn(progress++, max_progress);
-
-        const decrypt_result = await Webcrypt_Decrypt(logfn, commandDecryptParams);
-        await logfn(JSON.stringify(decrypt_result));
-        const decoder = new TextDecoder();
-        const decoded_text = decoder.decode(hexStringToByte(decrypt_result.DATA));
-        const decoded_text_no_pad = decoder.decode(remove_pkcs7_pad_16(hexStringToByte(decrypt_result.DATA)));
-        await logfn(JSON.stringify(decoded_text));
-        await logfn(JSON.stringify(decoded_text_no_pad));
-        await progressfn(progress++, max_progress);
-
-        TEST(decoded_text_no_pad == encryptText, `${decoded_text_no_pad} == ${encryptText}`, logfn);
-    }
-    catch (e) {
-        await logfn(JSON.stringify(e));
-        throw e;
-    }
 
     let status_res = await Webcrypt_Status(logfn);
     await logfn(JSON.stringify(status_res));
@@ -255,5 +189,68 @@ export async function WebcryptTests(logfn: StatusCallback, progressfn: ProgressC
         }, "ERR_BAD_FORMAT");
         await progressfn(progress++, max_progress);
     }
+
+    try
+    {
+        const kh = await Webcrypt_GenerateKey(logfn);
+        const encryptText = "text to encrypt, but even longer and longer";
+        const PUBKEY = kh.PUBKEY;
+        const KEYHANDLE = kh.KEYHANDLE;
+
+
+        const plaintext = await encode_text(encryptText);
+        const plaintext_with_len = flatten([buffer_to_uint8(await number_to_short(plaintext.length)), plaintext]);
+        const plaintext_pad = pkcs7_pad_16(plaintext_with_len);
+        const pubkey_raw = hexStringToByte(PUBKEY);
+        const pubkey = await import_key(pubkey_raw);
+        const pubkey_ecdh = await ecdsa_to_ecdh(pubkey);
+        const keyhandle = hexStringToByte(KEYHANDLE);
+        const ephereal_keypair = await generate_key_ecc();
+        const ephereal_pubkey = ephereal_keypair.publicKey;
+        const ephereal_pubkey_raw = await export_key(ephereal_pubkey);
+        const aes_key = await agree_on_key(ephereal_keypair.privateKey, pubkey_ecdh);
+        const ciphertext = await encrypt_aes(aes_key, plaintext_pad);
+        const ciphertext_len = await number_to_short(ciphertext.byteLength);
+        // TODO: DESIGN derive different keys for hmac and encryption
+        const data_to_hmac = flatten([buffer_to_uint8(ciphertext), ephereal_pubkey_raw,
+            buffer_to_uint8(ciphertext_len), keyhandle]);
+        const hmac = await calculate_hmac(aes_key, data_to_hmac);
+
+        const result = {
+            DATA: buffer_to_uint8(ciphertext),
+            KEYHANDLE: keyhandle,
+            HMAC: buffer_to_uint8(hmac),
+            ECCEKEY: ephereal_pubkey_raw
+        };
+
+        const commandDecryptParams = new CommandDecryptParams(
+            byteToHexString(buffer_to_uint8(ciphertext)),
+            byteToHexString(keyhandle),
+            byteToHexString(buffer_to_uint8(hmac)),
+            byteToHexString(ephereal_pubkey_raw)
+        );
+
+        await logfn(JSON.stringify(dict_hexval(result)));
+        await progressfn(progress++, max_progress);
+
+        const decrypt_result = await Webcrypt_Decrypt(logfn, commandDecryptParams);
+        await logfn(JSON.stringify(decrypt_result));
+        const decoder = new TextDecoder();
+        const decoded_text = decoder.decode(hexStringToByte(decrypt_result.DATA));
+
+        const text_len = uint8ToUint16(hexStringToByte(decrypt_result.DATA).slice(0,2), true);
+        const decoded_text_no_pad_cut = decoder.decode( hexStringToByte(decrypt_result.DATA).slice(2, text_len+2) );
+
+        await logfn(JSON.stringify(decoded_text));
+        await logfn(JSON.stringify(decoded_text_no_pad_cut));
+        await progressfn(progress++, max_progress);
+
+        TEST(decoded_text_no_pad_cut == encryptText, `${decoded_text_no_pad_cut} == ${encryptText}`, logfn);
+    }
+    catch (e) {
+        await logfn(JSON.stringify(e));
+        throw e;
+    }
+
 }
 

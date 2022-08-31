@@ -53,8 +53,8 @@ export function hexStringToByte(str: string): Uint8Array {
 }
 
 
-export function uint8ToUint16(uint_arr: Uint8Array) {
-    return (new DataView(uint_arr.buffer)).getUint16(0, false);
+export function uint8ToUint16(uint_arr: Uint8Array, littleEndian = false) {
+    return (new DataView(uint_arr.buffer)).getUint16(0, littleEndian);
 }
 
 export function flatten(u8_arr_arr: Array<Uint8Array>): Uint8Array{
