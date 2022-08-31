@@ -60,7 +60,7 @@
             <b-form-input v-model="text" placeholder="Enter data to hash and sign"></b-form-input>
             <b-form-input v-model="hash" placeholder="Calculated hash" disabled></b-form-input>
             <b-form-input v-model="signature" placeholder="Signature" disabled></b-form-input>
-            <b-form-input v-model="SignatureVerified" placeholder="Signature verified?" disabled></b-form-input>
+            <b-form-input v-model="SignatureCorrect" placeholder="Signature verified?" disabled></b-form-input>
             <button @click="signData" :disabled="!logged_in || !KEYHANDLE">SIGN DATA</button>
 
           </b-tab>
@@ -149,7 +149,7 @@ import {
   Webcrypt_Login,
   Webcrypt_Logout,
   Webcrypt_SetPin,
-  WEBCRYPT_SIGN,
+  WEBCRYPT_SIGN, WEBCRYPT_VERIFY,
 } from "@/js/webcrypt";
 import {
   agree_on_key, buffer_to_uint8,
@@ -205,6 +205,7 @@ export default class NitrokeyWebcryptDemo extends Vue {
   encryptText = "";
   encryptTextResult = "";
   decryptText = "";
+  SignatureCorrect = "not verified";
 
   get params() {
     if (this.selected === null) {
@@ -240,52 +241,19 @@ export default class NitrokeyWebcryptDemo extends Vue {
   }
 
   async verify(): Promise<boolean> {
-    const algorithm = {
-      name: "ECDSA",
-      hash: {name: "SHA-256"},
-      namedCurve: "P-256",
-    };
-
-    try {
-      const publicKey = await crypto.subtle.importKey(
-          'raw',
-          hexStringToByte(this.PUBKEY),
-          algorithm,
-          true,
-          ["verify"]
-      );
-
-      const signature = hexStringToByte(this.signature);
-      const encoded = hexStringToByte(this.hash);
-
-      const result = await window.crypto.subtle.verify(
-          algorithm,
-          publicKey,
-          signature,
-          encoded
-      );
-      console.log("verify result", result);
-
-      return result;
-    } catch (e) {
-      console.log('fail', e);
-      return false;
-      // throw e;
-    }
-    // eslint-disable-next-line no-unreachable
-    return false;
+    return await WEBCRYPT_VERIFY(this.log_console, this.PUBKEY, this.signature, this.hash);
   }
 
-  get SignatureVerified() {
+  async SignatureVerified() {
     if (this.signature == "") {
       return "not verified";
     }
 
-    if (this.verify()) {
+    if (await this.verify()) {
       return "verified!";
     }
 
-    return "not verified";
+    return "not correct";
   }
 
   get state(){
@@ -329,6 +297,7 @@ export default class NitrokeyWebcryptDemo extends Vue {
   async signData(): Promise<void> {
     const sign = await WEBCRYPT_SIGN(this.log_console, this.hashU8, hexStringToByte(this.KEYHANDLE));
     this.signature = sign;
+    this.SignatureCorrect = await this.SignatureVerified();
   }
 
   async encryptData(): Promise<string> {

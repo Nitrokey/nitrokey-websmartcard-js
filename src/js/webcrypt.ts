@@ -151,3 +151,33 @@ export async function WEBCRYPT_ENCRYPT(statusCallback: StatusCallback, data_to_e
         byteToHexString(ephereal_pubkey_raw)
     );
 }
+
+export async function WEBCRYPT_VERIFY(statusCallback: StatusCallback, pubkey_hex: string, signature_hex: string, hash_hex: string): Promise<boolean> {
+    const algorithm = {
+        name: "ECDSA",
+        hash: {name: "SHA-256"},
+        namedCurve: "P-256",
+    };
+    try {
+        const publicKey = await crypto.subtle.importKey(
+            'raw',
+            hexStringToByte(pubkey_hex),
+            algorithm,
+            true,
+            ["verify"]
+        );
+
+        const signature = hexStringToByte(signature_hex);
+        const encoded = hexStringToByte(hash_hex);
+
+        return await window.crypto.subtle.verify(
+            algorithm,
+            publicKey,
+            signature,
+            encoded
+        );
+    } catch (e) {
+        console.log('fail', e);
+        return false;
+    }
+}
