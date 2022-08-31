@@ -7,12 +7,29 @@
 
 
 import {send_command} from "./transport";
-import {WEBCRYPT_CMD, string_to_errcode, VERBOSE} from "./constants";
+import {string_to_errcode, VERBOSE, WEBCRYPT_CMD} from "./constants";
 import {CommandExecutionError} from "./exceptions";
-import {delay} from "@/js/helpers";
+import {
+    agree_on_key,
+    buffer_to_uint8,
+    byteToHexString,
+    calculate_hmac,
+    delay,
+    ecdsa_to_ecdh,
+    encode_text,
+    encrypt_aes,
+    export_key,
+    flatten,
+    generate_key_ecc,
+    hexStringToByte,
+    import_key,
+    number_to_short,
+    pkcs7_pad_16
+} from "@/js/helpers";
 import {Session} from "@/js/session";
 import {log_fn} from "@/js/logs";
 import {Dictionary, StatusCallback, WCKeyDetails} from "@/js/types";
+import {CommandDecryptParams} from "@/js/commands";
 
 export * from "@/js/commands";
 
@@ -99,4 +116,38 @@ export async function WEBCRYPT_SIGN(statusCallback: StatusCallback, hash: Uint8A
     const data_to_send = {'HASH': hash, 'KEYHANDLE': key_handle};
     const res = await send_command(session, WEBCRYPT_CMD.SIGN, data_to_send, statusCallback);
     return res["SIGNATURE"];
+}
+
+export async function WEBCRYPT_ENCRYPT(statusCallback: StatusCallback, data_to_encrypt: string, pubkey_hex: string, keyhandle_hex: string): Promise<CommandDecryptParams> {
+    // 1. Generate ECC key
+    // 2. Agree on a shared secret with the keyhandle's public key
+    // 3. Encrypt data with the shared secret AES-256
+    // 4. Calculate HMAC
+    // 5. Pack it or provide in separate fields.
+
+    // TODO accept uint8array type for encryption as well
+    const plaintext = await encode_text(data_to_encrypt);
+    const plaintext_with_len = flatten([buffer_to_uint8(await number_to_short(plaintext.length)), plaintext]);
+    const plaintext_pad = pkcs7_pad_16(plaintext_with_len);
+    const pubkey_raw = hexStringToByte(pubkey_hex);
+    const pubkey = await import_key(pubkey_raw); // TODO import directly as ECDH, without usages
+    const pubkey_ecdh = await ecdsa_to_ecdh(pubkey);
+    const keyhandle = hexStringToByte(keyhandle_hex);
+    const ephereal_keypair = await generate_key_ecc();
+    const ephereal_pubkey = ephereal_keypair.publicKey;
+    const ephereal_pubkey_raw = await export_key(ephereal_pubkey);
+    const aes_key = await agree_on_key(ephereal_keypair.privateKey, pubkey_ecdh);
+    const ciphertext = await encrypt_aes(aes_key, plaintext_pad);
+    const ciphertext_len = await number_to_short(ciphertext.byteLength);
+    // TODO: DESIGN derive different keys for hmac and encryption
+    const data_to_hmac = flatten([buffer_to_uint8(ciphertext), ephereal_pubkey_raw,
+        buffer_to_uint8(ciphertext_len), keyhandle]);
+    const hmac = await calculate_hmac(aes_key, data_to_hmac);
+
+    return new CommandDecryptParams(
+        byteToHexString(buffer_to_uint8(ciphertext)),
+        byteToHexString(keyhandle),
+        byteToHexString(buffer_to_uint8(hmac)),
+        byteToHexString(ephereal_pubkey_raw)
+    );
 }

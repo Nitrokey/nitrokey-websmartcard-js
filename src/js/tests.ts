@@ -11,7 +11,7 @@ import {
     CommandLoginParams, CommandReadResidentKeyPublicParams, CommandRestoreFromSeedParams, CommandSetConfigurationParams,
     CommandSetPinParams,
     CommandSignParams, CommandWriteResidentKeyParams,
-    Webcrypt_ChangePin, Webcrypt_Decrypt,
+    Webcrypt_ChangePin, Webcrypt_Decrypt, WEBCRYPT_ENCRYPT,
     Webcrypt_FactoryReset,
     Webcrypt_GenerateKey,
     Webcrypt_GenerateKeyFromData,
@@ -24,7 +24,7 @@ import {
     Webcrypt_Status, Webcrypt_WriteResidentKey,
     WebcryptData
 } from "@/js/webcrypt";
-import {ProgressCallback, StatusCallback} from "@/js/types";
+import {Dictionary, ProgressCallback, StatusCallback} from "@/js/types";
 import {
     agree_on_key, buffer_to_uint8, byteToHexString, calculate_hmac, dict_hexval, ecdsa_to_ecdh,
     encode_text, encrypt_aes,
@@ -197,40 +197,8 @@ export async function WebcryptTests(logfn: StatusCallback, progressfn: ProgressC
         const PUBKEY = kh.PUBKEY;
         const KEYHANDLE = kh.KEYHANDLE;
 
-
-        const plaintext = await encode_text(encryptText);
-        const plaintext_with_len = flatten([buffer_to_uint8(await number_to_short(plaintext.length)), plaintext]);
-        const plaintext_pad = pkcs7_pad_16(plaintext_with_len);
-        const pubkey_raw = hexStringToByte(PUBKEY);
-        const pubkey = await import_key(pubkey_raw);
-        const pubkey_ecdh = await ecdsa_to_ecdh(pubkey);
-        const keyhandle = hexStringToByte(KEYHANDLE);
-        const ephereal_keypair = await generate_key_ecc();
-        const ephereal_pubkey = ephereal_keypair.publicKey;
-        const ephereal_pubkey_raw = await export_key(ephereal_pubkey);
-        const aes_key = await agree_on_key(ephereal_keypair.privateKey, pubkey_ecdh);
-        const ciphertext = await encrypt_aes(aes_key, plaintext_pad);
-        const ciphertext_len = await number_to_short(ciphertext.byteLength);
-        // TODO: DESIGN derive different keys for hmac and encryption
-        const data_to_hmac = flatten([buffer_to_uint8(ciphertext), ephereal_pubkey_raw,
-            buffer_to_uint8(ciphertext_len), keyhandle]);
-        const hmac = await calculate_hmac(aes_key, data_to_hmac);
-
-        const result = {
-            DATA: buffer_to_uint8(ciphertext),
-            KEYHANDLE: keyhandle,
-            HMAC: buffer_to_uint8(hmac),
-            ECCEKEY: ephereal_pubkey_raw
-        };
-
-        const commandDecryptParams = new CommandDecryptParams(
-            byteToHexString(buffer_to_uint8(ciphertext)),
-            byteToHexString(keyhandle),
-            byteToHexString(buffer_to_uint8(hmac)),
-            byteToHexString(ephereal_pubkey_raw)
-        );
-
-        await logfn(JSON.stringify(dict_hexval(result)));
+        const commandDecryptParams = await WEBCRYPT_ENCRYPT(logfn, encryptText, PUBKEY, KEYHANDLE);
+        await logfn(JSON.stringify(commandDecryptParams));
         await progressfn(progress++, max_progress);
 
         const decrypt_result = await Webcrypt_Decrypt(logfn, commandDecryptParams);

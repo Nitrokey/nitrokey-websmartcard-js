@@ -65,17 +65,30 @@
 
           </b-tab>
           <b-tab title="Encrypt">
-            <p>Data encryption</p>
+            <p>Data encryption (run without device)</p>
 
             <b-form-input v-model="encryptText" placeholder="Enter data to encrypt"></b-form-input>
-            <b-form-input v-model="encryptTextResult" placeholder="Here will be encryption result"></b-form-input>
+            <b-form-textarea
+                placeholder="Here will be encryption result"
+                v-model="encryptTextResult"
+                rows="3"
+                max-rows="12"
+                disabled
+            ></b-form-textarea>
+
             <button @click="encryptData" :disabled="!KEYHANDLE">ENCRYPT DATA</button>
 
           </b-tab>
           <b-tab title="Decrypt">
             <p>Data decryption</p>
+            <b-form-textarea
+                placeholder="Here will be encryption result"
+                v-model="encryptTextResult"
+                rows="3"
+                max-rows="12"
+            ></b-form-textarea>
 
-            <b-form-input v-model="decryptText" placeholder="Enter data to decrypt"></b-form-input>
+            <b-form-input v-model="decryptText" placeholder="Here decrypted data will be presented" disabled></b-form-input>
             <button @click="decryptData" :disabled="!logged_in || !KEYHANDLE">DECRYPT DATA</button>
 
 
@@ -129,7 +142,7 @@
 import {Component, Prop, Vue} from 'vue-property-decorator';
 import {
   CommandLoginParams,
-  CommandSetPinParams,
+  CommandSetPinParams, Webcrypt_Decrypt, WEBCRYPT_ENCRYPT,
   Webcrypt_FactoryReset,
   WEBCRYPT_GENERATE,
   WEBCRYPT_GENERATE_FROM_DATA,
@@ -147,7 +160,7 @@ import {
   dict_hexval, encode_text, encrypt_aes, export_key, flatten,
   generate_key_ecc,
   hexStringToByte, import_key,
-  keys, number_to_short
+  keys, number_to_short, uint8ToUint16
 } from "@/js/helpers";
 import {sha256} from "js-sha256";
 import {send_command} from "@/js/transport";
@@ -318,42 +331,27 @@ export default class NitrokeyWebcryptDemo extends Vue {
     this.signature = sign;
   }
 
-  async encryptData(): Promise<void> {
-    // const publicKey = await crypto.subtle.importKey();
-    // 1. Generate ECC key
-    // 2. Agree on a shared secret with the keyhandle's public key
-    // 3. Encrypt data with the shared secret AES-256
-    // 4. Calculate HMAC
-    // 5. Pack it or provide in separate fields.
-
-    const plaintext = await encode_text(this.encryptText);
-    const pubkey_raw = hexStringToByte(this.PUBKEY);
-    const pubkey = await import_key(pubkey_raw);
-    const keyhandle = hexStringToByte(this.KEYHANDLE);
-    const ephereal_keypair = await generate_key_ecc();
-    const ephereal_pubkey = ephereal_keypair.publicKey;
-    const ephereal_pubkey_raw = await export_key(ephereal_pubkey);
-    const aes_key = await agree_on_key(ephereal_keypair.privateKey, pubkey);
-    const ciphertext = await encrypt_aes(aes_key, plaintext);
-    const ciphertext_len = await number_to_short(ciphertext.byteLength);
-    // TODO: DESIGN derive different keys for hmac and encryption
-    const hmac = await calculate_hmac(ephereal_keypair.privateKey,
-        flatten([buffer_to_uint8(ciphertext), ephereal_pubkey_raw,
-          buffer_to_uint8(ciphertext_len), keyhandle])
-    );
-
-    const result = {
-      DATA: ciphertext,
-      KEYHANDLE: keyhandle,
-      HMAC: hmac,
-      ECCEKEY: ephereal_pubkey_raw
-    };
-
+  async encryptData(): Promise<string> {
+    const result = await WEBCRYPT_ENCRYPT(this.log_console, this.encryptText, this.PUBKEY, this.KEYHANDLE);
     this.encryptTextResult = JSON.stringify(result);
+    return this.encryptTextResult;
   }
 
   async decryptData(): Promise<void> {
-    // see encryptData()
+
+    try{
+      const commandDecryptParams = JSON.parse(this.encryptTextResult);
+      const decrypt_result = await Webcrypt_Decrypt(this.log_console, commandDecryptParams);
+
+      const decoder = new TextDecoder();
+      const text_len = uint8ToUint16(hexStringToByte(decrypt_result.DATA).slice(0,2), true);
+      const decoded_text_no_pad_cut = decoder.decode( hexStringToByte(decrypt_result.DATA).slice(2, text_len+2) );
+      this.decryptText = decoded_text_no_pad_cut;
+    }
+    catch (e) {
+      this.decryptText = `Error encountered: ${e}`;
+    }
+
   }
 
   async execute_custom_command(event: Event) {
