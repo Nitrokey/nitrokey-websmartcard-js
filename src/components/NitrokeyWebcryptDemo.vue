@@ -395,7 +395,7 @@ export default class NitrokeyWebcryptDemo extends Vue {
 
   async WebcryptTests(): Promise<void> {
     // Run test Webcrypt calls
-    this.active_tab = 2;
+    this.active_tab = 4;
     this.console = "";
     await this.log_console('\n*** Running test commands\n');
 
