@@ -53,8 +53,8 @@ export function hexStringToByte(str: string): Uint8Array {
 }
 
 
-export function uint8ToUint16(uint_arr: Uint8Array) {
-    return (new DataView(uint_arr.buffer)).getUint16(0, false);
+export function uint8ToUint16(uint_arr: Uint8Array, littleEndian = false) {
+    return (new DataView(uint_arr.buffer)).getUint16(0, littleEndian);
 }
 
 export function flatten(u8_arr_arr: Array<Uint8Array>): Uint8Array{
@@ -159,4 +159,137 @@ export function delay(ms: number) {
 
 export function get_hash(o: string) {
     return sha256(o);
+}
+
+export async function generate_key_ecc(): Promise<CryptoKeyPair> {
+    const algorithm = {
+        name: "ECDH",
+        namedCurve: "P-256",
+    };
+    return await window.crypto.subtle.generateKey(
+        algorithm,
+        true,
+        ["deriveKey"]
+    ) as CryptoKeyPair ;
+}
+
+export async function agree_on_key(privateKey: CryptoKey, publicKey: CryptoKey) {
+    return window.crypto.subtle.deriveKey(
+        {
+            name: "ECDH",
+            public: publicKey
+        },
+        privateKey,
+        {
+            name: "AES-CBC",
+            length: 256
+        },
+        true,
+        ["encrypt", "decrypt"]
+    );
+}
+
+export async function encode_text(text:string) : Promise<Uint8Array> {
+    return new TextEncoder().encode(text);
+}
+
+export async function encrypt_aes(key:CryptoKey, data:Uint8Array): Promise<ArrayBuffer> {
+    const encoded = data;
+    const iv = new Uint8Array(16).fill(0);
+    return window.crypto.subtle.encrypt(
+        {
+            name: "AES-CBC",
+            iv: iv,
+            length: 256,
+        },
+        key,
+        encoded,
+    );
+}
+
+export async function calculate_hmac(key_in:CryptoKey, data:Uint8Array) {
+    const algorithm = { name: 'HMAC', hash: 'SHA-256' };
+    const encoder = new TextEncoder();
+
+    const keyraw = await export_key(key_in);
+
+    const key = await crypto.subtle.importKey(
+        'raw',
+        keyraw,
+        algorithm,
+        true,
+        ['sign', 'verify']
+    );
+
+    return await window.crypto.subtle.sign(
+        "HMAC",
+        key,
+        data
+    );
+}
+
+export async function number_to_short(n:number): Promise<ArrayBuffer> {
+    const buffer = new ArrayBuffer(2);
+    const dataView = new DataView(buffer);
+    dataView.setInt16(0, n, true);
+    return dataView.buffer;
+}
+
+export async function ecdsa_to_ecdh(pk:CryptoKey):Promise<CryptoKey> {
+    return await crypto.subtle.importKey('raw', await crypto.subtle.exportKey('raw', pk), {
+            name: "ecdh",
+            namedCurve: "P-256"
+        },
+        true,
+        []
+    );
+}
+
+export async function import_key(data:Uint8Array):Promise<CryptoKey> {
+    const algorithm = {
+        name: "ECDSA",
+        // hash: {name: "SHA-256"},
+        namedCurve: "P-256",
+    };
+    return await crypto.subtle.importKey(
+        'raw',
+        data,
+        algorithm,
+        true,
+        // ["deriveKey"]
+        ["verify"]
+    );
+}
+
+export async function export_key(key: CryptoKey): Promise<Uint8Array> {
+    const exported = await window.crypto.subtle.exportKey(
+        "raw",
+        key
+    );
+    return new Uint8Array(exported);
+}
+
+export function buffer_to_uint8(buf: ArrayBuffer) {
+    return new Uint8Array(buf as ArrayBuffer);
+}
+
+export function round_to_next(x:number, n:number): number
+{
+    return x + n - x % n;
+}
+
+export function pkcs7_pad_16(arr:Uint8Array): Uint8Array {
+    const s = arr.length;
+    const s_pad = round_to_next(s, 16);
+
+    const arr_padded = new Uint8Array(s_pad).fill(s_pad-s);
+    arr_padded.set(arr);
+    return arr_padded;
+}
+export function remove_pkcs7_pad_16(arr:Uint8Array): Uint8Array {
+    const pad_value = arr[arr.length-1];
+    if (pad_value>16){
+        return arr;
+    }
+    return arr.slice(0, arr.length-1-pad_value);
 }

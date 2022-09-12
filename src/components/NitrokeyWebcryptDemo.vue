@@ -60,23 +60,49 @@
             <b-form-input v-model="text" placeholder="Enter data to hash and sign"></b-form-input>
             <b-form-input v-model="hash" placeholder="Calculated hash" disabled></b-form-input>
             <b-form-input v-model="signature" placeholder="Signature" disabled></b-form-input>
-            <b-form-input v-model="SignatureVerified" placeholder="Signature verified?" disabled></b-form-input>
+            <b-form-input v-model="SignatureCorrect" placeholder="Signature verified?" disabled></b-form-input>
             <button @click="signData" :disabled="!logged_in || !KEYHANDLE">SIGN DATA</button>
 
           </b-tab>
-<!--          <b-tab title="Decrypt">-->
-<!--            <p>Data decryption</p>-->
-<!--          </b-tab>-->
-<!--          <b-tab title="Test"><p>Test and status</p></b-tab>-->
+          <b-tab title="Encrypt">
+            <p>Data encryption (run without device)</p>
+
+            <b-form-input v-model="encryptText" placeholder="Enter data to encrypt"></b-form-input>
+            <b-form-textarea
+                placeholder="Here will be encryption result"
+                v-model="encryptTextResult"
+                rows="3"
+                max-rows="12"
+                disabled
+            ></b-form-textarea>
+
+            <button @click="encryptData" :disabled="!KEYHANDLE">ENCRYPT DATA</button>
+
+          </b-tab>
+          <b-tab title="Decrypt">
+            <p>Data decryption</p>
+            <b-form-textarea
+                placeholder="Here will be encryption result"
+                v-model="encryptTextResult"
+                rows="3"
+                max-rows="12"
+            ></b-form-textarea>
+
+            <b-form-input v-model="decryptText" placeholder="Here decrypted data will be presented" disabled></b-form-input>
+            <button @click="decryptData" :disabled="!logged_in || !KEYHANDLE">DECRYPT DATA</button>
+
+
+          </b-tab>
+          <!--          <b-tab title="Test"><p>Test and status</p></b-tab>-->
 
           <b-tab title="Custom">
             <p>Custom commands</p>
             <b-form id="custom_cmd_form" @submit="execute_custom_command" @submit.stop.prevent>
-             <b-form-select v-model="selected"  :options="commands" />
+              <b-form-select v-model="selected" :options="commands"/>
 
-              <div v-for="p of params" >
+              <div v-for="p of params">
                 <b-form-input :placeholder=p.placeholder :name=p.name
-                               v-model="custom_cmd_form[p.name]" ></b-form-input>
+                              v-model="custom_cmd_form[p.name]"></b-form-input>
               </div>
 <!--            <button @click="execute_custom_command">Execute</button>-->
               <b-button type="submit" variant="primary">Execute</b-button>
@@ -92,7 +118,7 @@
           <b-tab title="Console">
             <p>Console data</p>
 
-<!--            <b-progress :value="value" :max="max" show-progress animated></b-progress>-->
+            <!--            <b-progress :value="value" :max="max" show-progress animated></b-progress>-->
             <button @click="clear_console">Clear</button>
             <b-progress-bar v-model="progress.value" :max="progress.max" variant="success" show-progress show-value></b-progress-bar>
             <b-form-textarea
@@ -114,31 +140,43 @@
 
 <script lang="ts">
 import {Component, Prop, Vue} from 'vue-property-decorator';
-import {WEBCRYPT_GENERATE, WEBCRYPT_GENERATE_FROM_DATA, WEBCRYPT_SIGN,} from "@/js/webcrypt";
-import {byteToHexString, clone_object, dict_binval, dict_empty, dict_hexval, hexStringToByte, keys} from "@/js/helpers";
+import {
+  CommandLoginParams,
+  CommandSetPinParams, Webcrypt_Decrypt, WEBCRYPT_ENCRYPT,
+  Webcrypt_FactoryReset,
+  WEBCRYPT_GENERATE,
+  WEBCRYPT_GENERATE_FROM_DATA,
+  Webcrypt_Login,
+  Webcrypt_Logout,
+  Webcrypt_SetPin,
+  WEBCRYPT_SIGN, WEBCRYPT_VERIFY,
+} from "@/js/webcrypt";
+import {
+  agree_on_key, buffer_to_uint8,
+  byteToHexString, calculate_hmac,
+  clone_object,
+  dict_binval,
+  dict_empty,
+  dict_hexval, encode_text, encrypt_aes, export_key, flatten,
+  generate_key_ecc,
+  hexStringToByte, import_key,
+  keys, number_to_short, uint8ToUint16
+} from "@/js/helpers";
 import {sha256} from "js-sha256";
 import {send_command} from "@/js/transport";
 import {commands_parameters, string_to_command} from "@/js/constants";
 import {Session} from "@/js/session";
 import {Dictionary} from "@/js/types";
 import {log_fn} from "@/js/logs";
-import {
-  CommandLoginParams,
-  CommandSetPinParams,
-  Webcrypt_FactoryReset,
-  Webcrypt_Login,
-  Webcrypt_Logout,
-  Webcrypt_SetPin
-} from "@/js/webcrypt";
 import {WebcryptTests} from "@/js/tests";
 
 
-function keys_to_options(keys_list:any):any{
+function keys_to_options(keys_list: any): any {
   let a = [];
-  a.push(Object.freeze({ value: null, text: 'Please select an option' }  ));
-  for (const k in keys_list){
+  a.push(Object.freeze({value: null, text: 'Please select an option'}));
+  for (const k in keys_list) {
     const s = keys_list[k];
-    a.push(Object.freeze({ value: s, text: s }  ));
+    a.push(Object.freeze({value: s, text: s}));
   }
   // console.log(a);
   return a;
@@ -164,6 +202,10 @@ export default class NitrokeyWebcryptDemo extends Vue {
   active_tab = 0;
   progress = {value: 0, max: 100};
   logged_in = "";
+  encryptText = "";
+  encryptTextResult = "";
+  decryptText = "";
+  SignatureCorrect = "not verified";
 
   get params() {
     if (this.selected === null) {
@@ -199,52 +241,19 @@ export default class NitrokeyWebcryptDemo extends Vue {
   }
 
   async verify(): Promise<boolean> {
-    const algorithm = {
-      name: "ECDSA",
-      hash: {name: "SHA-256"},
-      namedCurve: "P-256",
-    };
-
-    try {
-      const publicKey = await crypto.subtle.importKey(
-          'raw',
-          hexStringToByte(this.PUBKEY),
-          algorithm,
-          true,
-          ["verify"]
-      );
-
-      const signature = hexStringToByte(this.signature);
-      const encoded = hexStringToByte(this.hash);
-
-      const result = await window.crypto.subtle.verify(
-          algorithm,
-          publicKey,
-          signature,
-          encoded
-      );
-      console.log("verify result", result);
-
-      return result;
-    } catch (e) {
-      console.log('fail', e);
-      return false;
-      // throw e;
-    }
-    // eslint-disable-next-line no-unreachable
-    return false;
+    return await WEBCRYPT_VERIFY(this.log_console, this.PUBKEY, this.signature, this.hash);
   }
 
-  get SignatureVerified() {
+  async SignatureVerified() {
     if (this.signature == "") {
       return "not verified";
     }
 
-    if (this.verify()) {
+    if (await this.verify()) {
       return "verified!";
     }
 
-    return "not verified";
+    return "not correct";
   }
 
   get state(){
@@ -288,10 +297,33 @@ export default class NitrokeyWebcryptDemo extends Vue {
   async signData(): Promise<void> {
     const sign = await WEBCRYPT_SIGN(this.log_console, this.hashU8, hexStringToByte(this.KEYHANDLE));
     this.signature = sign;
+    this.SignatureCorrect = await this.SignatureVerified();
   }
 
+  async encryptData(): Promise<string> {
+    const result = await WEBCRYPT_ENCRYPT(this.log_console, this.encryptText, this.PUBKEY, this.KEYHANDLE);
+    this.encryptTextResult = JSON.stringify(result);
+    return this.encryptTextResult;
+  }
 
-  async execute_custom_command(event: Event){
+  async decryptData(): Promise<void> {
+
+    try{
+      const commandDecryptParams = JSON.parse(this.encryptTextResult);
+      const decrypt_result = await Webcrypt_Decrypt(this.log_console, commandDecryptParams);
+
+      const decoder = new TextDecoder();
+      const text_len = uint8ToUint16(hexStringToByte(decrypt_result.DATA).slice(0,2), true);
+      const decoded_text_no_pad_cut = decoder.decode( hexStringToByte(decrypt_result.DATA).slice(2, text_len+2) );
+      this.decryptText = decoded_text_no_pad_cut;
+    }
+    catch (e) {
+      this.decryptText = `Error encountered: ${e}`;
+    }
+
+  }
+
+  async execute_custom_command(event: Event) {
     event.preventDefault();
     if (this.selected === null) return;
     this.custom_cmd_form_reply = "PENDING";
@@ -305,8 +337,7 @@ export default class NitrokeyWebcryptDemo extends Vue {
     const session = new Session();
     try {
       res = await send_command(session, command, data_to_send, log_fn);
-    }
-    catch (e) {
+    } catch (e) {
       this.custom_cmd_form_reply = `Error: ${JSON.stringify(e)}`;
       return;
     }
@@ -331,7 +362,7 @@ export default class NitrokeyWebcryptDemo extends Vue {
 
   async WebcryptTests(): Promise<void> {
     // Run test Webcrypt calls
-    this.active_tab = 2;
+    this.active_tab = 4;
     this.console = "";
     await this.log_console('\n*** Running test commands\n');
 

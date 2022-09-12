@@ -11,7 +11,7 @@ import {
     CommandLoginParams, CommandReadResidentKeyPublicParams, CommandRestoreFromSeedParams, CommandSetConfigurationParams,
     CommandSetPinParams,
     CommandSignParams, CommandWriteResidentKeyParams,
-    Webcrypt_ChangePin, Webcrypt_Decrypt,
+    Webcrypt_ChangePin, Webcrypt_Decrypt, WEBCRYPT_ENCRYPT,
     Webcrypt_FactoryReset,
     Webcrypt_GenerateKey,
     Webcrypt_GenerateKeyFromData,
@@ -24,8 +24,17 @@ import {
     Webcrypt_Status, Webcrypt_WriteResidentKey,
     WebcryptData
 } from "@/js/webcrypt";
-import {ProgressCallback, StatusCallback} from "@/js/types";
-import {get_hash, TEST} from "@/js/helpers";
+import {Dictionary, ProgressCallback, StatusCallback} from "@/js/types";
+import {
+    agree_on_key, buffer_to_uint8, byteToHexString, calculate_hmac, dict_hexval, ecdsa_to_ecdh,
+    encode_text, encrypt_aes,
+    export_key, flatten,
+    generate_key_ecc,
+    get_hash, getBinaryStr,
+    hexStringToByte,
+    import_key, number_to_short, pkcs7_pad_16, remove_pkcs7_pad_16,
+    TEST, uint8ToUint16
+} from "@/js/helpers";
 
 class TestRecord {
     public fn: Function;
@@ -73,7 +82,7 @@ export async function should_throw(logfn:Function, fn:Function, expected_str:str
 
 export async function WebcryptTests(logfn: StatusCallback, progressfn: ProgressCallback): Promise<void> {
     let progress = 0;
-    const max_progress = 21;
+    const max_progress = 23;
     await Webcrypt_FactoryReset(logfn);
     await progressfn(progress++, max_progress);
 
@@ -180,5 +189,36 @@ export async function WebcryptTests(logfn: StatusCallback, progressfn: ProgressC
         }, "ERR_BAD_FORMAT");
         await progressfn(progress++, max_progress);
     }
+
+    try
+    {
+        const kh = await Webcrypt_GenerateKey(logfn);
+        const encryptText = "text to encrypt, but even longer and longer";
+        const PUBKEY = kh.PUBKEY;
+        const KEYHANDLE = kh.KEYHANDLE;
+
+        const commandDecryptParams = await WEBCRYPT_ENCRYPT(logfn, encryptText, PUBKEY, KEYHANDLE);
+        await logfn(JSON.stringify(commandDecryptParams));
+        await progressfn(progress++, max_progress);
+
+        const decrypt_result = await Webcrypt_Decrypt(logfn, commandDecryptParams);
+        await logfn(JSON.stringify(decrypt_result));
+        const decoder = new TextDecoder();
+        const decoded_text = decoder.decode(hexStringToByte(decrypt_result.DATA));
+
+        const text_len = uint8ToUint16(hexStringToByte(decrypt_result.DATA).slice(0,2), true);
+        const decoded_text_no_pad_cut = decoder.decode( hexStringToByte(decrypt_result.DATA).slice(2, text_len+2) );
+
+        await logfn(JSON.stringify(decoded_text));
+        await logfn(JSON.stringify(decoded_text_no_pad_cut));
+        await progressfn(progress++, max_progress);
+
+        TEST(decoded_text_no_pad_cut == encryptText, `${decoded_text_no_pad_cut} == ${encryptText}`, logfn);
+    }
+    catch (e) {
+        await logfn(JSON.stringify(e));
+        throw e;
+    }
+
 }
 
