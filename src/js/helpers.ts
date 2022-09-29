@@ -5,8 +5,7 @@
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 
-import {Dictionary, StatusCallback} from "@/js/types";
-import {sha256} from "js-sha256";
+import {Dictionary, StatusCallback} from "./types";
 
 class TestError extends Error {
 
@@ -157,8 +156,11 @@ export function delay(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export function get_hash(o: string) {
-    return sha256(o);
+export async function get_hash(o: string) {
+    // import {sha256} from "js-sha256";
+    // return sha256(o);
+    const buffer = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(o));
+    return byteToHexString(new Uint8Array(buffer));
 }
 
 export async function generate_key_ecc(): Promise<CryptoKeyPair> {
@@ -292,4 +294,14 @@ export function remove_pkcs7_pad_16(arr:Uint8Array): Uint8Array {
         return arr;
     }
     return arr.slice(0, arr.length-1-pad_value);
+}
+
+export function equalBuffer (buf1:Uint8Array, buf2:Uint8Array)
+{
+    if (buf1.byteLength != buf2.byteLength) return false;
+    for (let i = 0 ; i != buf1.byteLength ; i++)
+    {
+        if (buf1[i] != buf2[i]) return false;
+    }
+    return true;
 }

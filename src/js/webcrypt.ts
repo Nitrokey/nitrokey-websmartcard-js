@@ -14,6 +14,7 @@ import {
     buffer_to_uint8,
     byteToHexString,
     calculate_hmac,
+    concat,
     delay,
     ecdsa_to_ecdh,
     encode_text,
@@ -25,13 +26,14 @@ import {
     import_key,
     number_to_short,
     pkcs7_pad_16
-} from "@/js/helpers";
-import {Session} from "@/js/session";
-import {log_fn} from "@/js/logs";
-import {Dictionary, StatusCallback, WCKeyDetails} from "@/js/types";
-import {CommandDecryptParams} from "@/js/commands";
+} from "./helpers";
+import {Session} from "./session";
+import {log_fn} from "./logs";
+import {Dictionary, StatusCallback, WCKeyDetails} from "./types";
+import {CommandDecryptParams, WebcryptData} from "./commands";
 
-export * from "@/js/commands";
+export * from "./commands";
+export {hexStringToByte, byteToHexString};
 
 const session = new Session();
 
@@ -170,14 +172,60 @@ export async function WEBCRYPT_VERIFY(statusCallback: StatusCallback, pubkey_hex
         const signature = hexStringToByte(signature_hex);
         const encoded = hexStringToByte(hash_hex);
 
-        return await window.crypto.subtle.verify(
+        const verify_res: boolean = await window.crypto.subtle.verify(
             algorithm,
             publicKey,
             signature,
             encoded
         );
+        console.log('Verify result', { pubkey_hex, signature_hex, hash_hex, verify_res, publicKey });
+        return verify_res;
     } catch (e) {
         console.log('fail', e);
         return false;
     }
+}
+
+
+// export async function WEBCRYPT_OPENPGP_DECRYPT(statusCallback: StatusCallback, eccekey: Uint8Array, key_handle: Uint8Array, fingerprint: Uint8Array): Promise<string> {
+export async function WEBCRYPT_OPENPGP_DECRYPT(statusCallback: StatusCallback, eccekey: Uint8Array): Promise<Uint8Array> {
+    // const data_to_send = {'ECCEKEY': eccekey, 'KEYHANDLE': key_handle};
+    const data_to_send = {'ECCEKEY': eccekey};
+    const res = await send_command(session, WEBCRYPT_CMD.OPENPGP_DECRYPT, data_to_send, statusCallback);
+    return hexStringToByte(res["DATA"]);
+}
+
+export async function WEBCRYPT_OPENPGP_SIGN(statusCallback: StatusCallback, data: Uint8Array): Promise<string> {
+    const data_to_send = {'DATA': data };
+    const res = await send_command(session, WEBCRYPT_CMD.OPENPGP_SIGN, data_to_send, statusCallback);
+    return res["SIGNATURE"];
+}
+
+export async function WEBCRYPT_OPENPGP_INFO(statusCallback: StatusCallback): Promise<{ date: number; sign_pubkey: Uint8Array; encr_pubkey: Uint8Array }> {
+    const res = await send_command(session, WEBCRYPT_CMD.OPENPGP_INFO, {}, statusCallback);
+    const sign_pubkey = concat( new Uint8Array([0x04]), hexStringToByte(res["SIGN_PUBKEY"]) );
+    const encr_pubkey = concat( new Uint8Array([0x04]), hexStringToByte(res["ENCR_PUBKEY"]) );
+    const dateB = hexStringToByte(res["DATE"]);
+    const dateS = new TextDecoder().decode(dateB);
+    const date = Number(dateS);
+    console.log({encr_pubkey, sign_pubkey, date, name:'webcrypt openpgp info result'});
+    return {encr_pubkey, sign_pubkey, date}; // TODO return all keys
+}
+
+
+export async function WEBCRYPT_OPENPGP_IMPORT(statusCallback: StatusCallback, { encr_privkey  = null, sign_privkey  = null,
+    auth_privkey  = null, date= new Date(), ...rest } ) : Promise<void> {
+    // TODO design - allow for partial import?
+    const data = {
+        "ENCR_PRIVKEY": encr_privkey? byteToHexString(encr_privkey) : "",
+        "SIGN_PRIVKEY": sign_privkey? byteToHexString(sign_privkey) : "",
+        "AUTH_PRIVKEY": auth_privkey? byteToHexString(auth_privkey) : sign_privkey? byteToHexString(sign_privkey): "", // TODO FIXME
+        "DATE": byteToHexString(new TextEncoder().encode(date.getTime().toString())),
+    };
+    await send_command(session, WEBCRYPT_CMD.OPENPGP_IMPORT, data, statusCallback);
+}
+
+
+export async function WEBCRYPT_OPENPGP_GENERATE(statusCallback: StatusCallback): Promise<void> {
+    await send_command(session, WEBCRYPT_CMD.OPENPGP_GENERATE, {}, statusCallback);
 }

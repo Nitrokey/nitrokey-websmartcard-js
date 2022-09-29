@@ -24,11 +24,11 @@ import {
 import {concat, dict_binval, dict_hexval, flatten, int2arr, TEST, uint8ToUint16} from "./helpers"
 import {ctaphid_via_webauthn} from "./ctaphid"
 import {CommandExecutionError} from "./exceptions"
-import {gather_platform_info} from "@/js/platform";
+// import {gather_platform_info} from "./platform";
 
 import {Session} from "./session";
-import {log_message, log_message_library} from "@/js/logs";
-import {StatusCallback} from "@/js/types";
+import {log_message, log_message_library} from "./logs";
+import {StatusCallback} from "./types";
 
 
 function WEBCRYPT_get_protocol_header(op_type: WEBCRYPT_DEVICE_COMM, packet_num: number, number_of_packets: number,
@@ -218,7 +218,7 @@ export async function repeat_wrapper(func: Function, action: string, statusCallb
         await lib_delay(1000);
         continue;
       }
-      const failureText = `Action (${action}) failed. Error: ${e.message}`;
+      const failureText = `Action (${action}) failed. Error: ${e}`;
       await statusCallback(failureText);
       log_message(failureText);
       throw e;
@@ -226,7 +226,40 @@ export async function repeat_wrapper(func: Function, action: string, statusCallb
   }
 }
 
+// https://blog.testdouble.com/posts/2019-05-14-locking-with-promises/
+// https://github.com/testdouble/lockify/blob/main/lib/lockify.js
+// "license": "ISC",
+// @ts-ignore
+const lockify = f => {
+  let lock = Promise.resolve()
+
+  // @ts-ignore
+  return (...params) => {
+    const result = lock.then(() => f(...params))
+    lock = result.catch(() => {})
+
+    return result.then(value => value)
+  }
+}
+
+// export async function send_command(token: Session, cmd: WEBCRYPT_CMD, data: any = {}, statusCallback:StatusCallback): Promise<any> {
+const send_command_locked = lockify(_send_command);
+
 export async function send_command(token: Session, cmd: WEBCRYPT_CMD, data: any = {}, statusCallback:StatusCallback): Promise<any> {
+  log_message_library('Making lock');
+  const res =  await send_command_locked(token, cmd, data, statusCallback);
+  log_message_library('Releasing lock');
+  return res
+}
+
+/**
+ * All binary data have to be encoded into hex string. Returns hex strings.
+ * @param token Session token
+ * @param cmd Command to call
+ * @param data All binary data have to be encoded into hex string. Returns hex strings.
+ * @param statusCallback The callback for UI message logging
+ */
+async function _send_command(token: Session, cmd: WEBCRYPT_CMD, data: any = {}, statusCallback:StatusCallback): Promise<any> {
   data = dict_binval(data);
   if (cmd === WEBCRYPT_CMD.LOGOUT){
     token.clear();
@@ -257,4 +290,4 @@ export async function send_command(token: Session, cmd: WEBCRYPT_CMD, data: any 
 
 
 
-gather_platform_info();
+// gather_platform_info();

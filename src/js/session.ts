@@ -5,7 +5,7 @@
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 
-import {log_message_library} from "@/js/logs";
+import {log_message_library} from "./logs";
 
 export class Session {
     private validPeriod: number = 60000; //const

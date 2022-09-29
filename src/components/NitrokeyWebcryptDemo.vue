@@ -49,6 +49,7 @@
         <button @click="logout" :disabled="!logged_in">LOGOUT</button>
         <button @click="generateKey" :disabled="!logged_in">GENERATE KEY</button>
         <button @click="WebcryptTests">TEST</button>
+        <button @click="openpgpTests">OpenPGP</button>
 
       </div>
 
@@ -147,7 +148,7 @@ import {
   WEBCRYPT_GENERATE,
   WEBCRYPT_GENERATE_FROM_DATA,
   Webcrypt_Login,
-  Webcrypt_Logout,
+  Webcrypt_Logout, WEBCRYPT_OPENPGP_DECRYPT, WEBCRYPT_OPENPGP_INFO,
   Webcrypt_SetPin,
   WEBCRYPT_SIGN, WEBCRYPT_VERIFY,
 } from "@/js/webcrypt";
@@ -169,6 +170,7 @@ import {Session} from "@/js/session";
 import {Dictionary} from "@/js/types";
 import {log_fn} from "@/js/logs";
 import {WebcryptTests} from "@/js/tests";
+import {openpgpTests_ext} from "@/js/openpgp_tests";
 
 
 function keys_to_options(keys_list: any): any {
@@ -376,7 +378,13 @@ export default class NitrokeyWebcryptDemo extends Vue {
     await this.log_console('*** Finished test commands with status PASS\n\n');
 
   }
-}
+
+  async openpgpTests(): Promise<void> {
+    await openpgpTests_ext(this.log_console);
+  }
+
+
+  }
 </script>
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->

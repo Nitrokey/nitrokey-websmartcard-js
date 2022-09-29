@@ -10,7 +10,7 @@
 // https://github.com/solokeys/solo-webupdate
 
 import {CMD, command_codes, ctap_error_codes, VERBOSE} from "./constants";
-import {webauthn_supported} from "@/js/platform";
+// import {webauthn_supported} from "./platform";
 
 interface U2fResponse {
     authenticatorData: any;
@@ -117,8 +117,8 @@ export async function ctaphid_via_webauthn(cmd: CMD, data: Uint8Array, timeout: 
         userVerification: "discouraged",
     }
 
-    if (!webauthn_supported())
-        throw "Webauthn is not supported";
+    // if (!webauthn_supported())
+    //     throw "Webauthn is not supported";
 
     try {
         const result = await navigator.credentials.get({

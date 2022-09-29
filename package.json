@@ -11,7 +11,6 @@
     "bootstrap": "^4.5.3",
     "bootstrap-vue": "^2.18.1",
     "core-js": "^3.6.5",
-    "js-sha256": "^0.9.0",
     "vue": "^2.6.12",
     "vue-class-component": "^7.2.3",
     "vue-property-decorator": "^8.4.2"
@@ -23,11 +22,11 @@
     "@vue/test-utils": "^1.0.3",
     "node-sass": "*",
     "sass-loader": "*",
-    "typescript": "~3.9.3",
+    "typescript": "*",
     "vue-template-compiler": "^2.6.11"
   },
   "browserslist": [
-    "> 1%",
+    "> 30%",
     "last 2 versions",
     "not dead"
   ]

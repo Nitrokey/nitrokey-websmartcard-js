@@ -6,18 +6,19 @@
 // copied, modified, or distributed except according to those terms.
 
 
-import {JS_API_VERSION} from "@/js/version";
-import {log_message_library} from "@/js/logs";
+import {JS_API_VERSION} from "./version";
+import {log_message_library} from "./logs";
 
-// @ts-ignore
-let platform = require('./vendor/platform.js');
+// let platform = require('./vendor/platform.js');
+// import * as platfrom from './vendor/platform'
 
 export function webauthn_supported(): boolean {
     return window.PublicKeyCredential !== undefined;
 }
 
 export async function gather_platform_info() {
-    const platform_description = platform.description;
+    // const platform_description = platform.description;
+    const platform_description = 'NONE';
     log_message_library(`Nitrokey Webcrypt API Version: ${JS_API_VERSION}`);
     log_message_library(`Platform: ${platform_description}; Webauthn support: ${webauthn_supported()}`);
 

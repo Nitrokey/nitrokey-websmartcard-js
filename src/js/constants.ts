@@ -6,7 +6,7 @@
 // copied, modified, or distributed except according to those terms.
 
 
-export const VERBOSE = true;
+export const VERBOSE = false;
 
 
 export enum CMD {
@@ -56,6 +56,12 @@ export enum WEBCRYPT_CMD {
     DISCOVER_RESIDENT_KEYS = 0x18,
     /// Write RAW key as received from the RP
     WRITE_RESIDENT_KEY = 0x19,
+
+    OPENPGP_DECRYPT = 0x20,
+    OPENPGP_SIGN = 0x21,
+    OPENPGP_INFO = 0x22,
+    OPENPGP_IMPORT= 0x23,
+    OPENPGP_GENERATE = 0x24,
 
     /// Implementation detail: default value
     NOT_SET = 0xFE,
@@ -185,6 +191,13 @@ export const command_to_string: NumberToStringMap = {
     0x17: "READ_RESIDENT_KEY_PUBLIC",
     0x18: "DISCOVER_RESIDENT_KEYS",
     0x19: "WRITE_RESIDENT_KEY",
+
+    0x20: "OPENPGP_DECRYPT",
+    0x21: "OPENPGP_SIGN",
+    0x22: "OPENPGP_INFO",
+    0x23: "OPENPGP_IMPORT",
+    0x24: "OPENPGP_INIT",
+
     0xFE: "NOT_SET",
 };
 

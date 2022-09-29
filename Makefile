@@ -2,7 +2,7 @@ all: serve
 
 .PHONY: serve https
 serve:
-	yarn serve
+	env NODE_ENV=development yarn serve
 
 HOST=stumpy.local
 https:

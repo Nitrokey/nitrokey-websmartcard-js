@@ -23,8 +23,8 @@ import {
     Webcrypt_Sign,
     Webcrypt_Status, Webcrypt_WriteResidentKey,
     WebcryptData
-} from "@/js/webcrypt";
-import {Dictionary, ProgressCallback, StatusCallback} from "@/js/types";
+} from "./webcrypt";
+import {Dictionary, ProgressCallback, StatusCallback} from "./types";
 import {
     agree_on_key, buffer_to_uint8, byteToHexString, calculate_hmac, dict_hexval, ecdsa_to_ecdh,
     encode_text, encrypt_aes,
@@ -34,7 +34,7 @@ import {
     hexStringToByte,
     import_key, number_to_short, pkcs7_pad_16, remove_pkcs7_pad_16,
     TEST, uint8ToUint16
-} from "@/js/helpers";
+} from "./helpers";
 
 class TestRecord {
     public fn: Function;
@@ -66,7 +66,7 @@ export async function should_throw(logfn:Function, fn:Function, expected_str:str
     try {
         await fn();
         TEST(false, "This should fail");
-    } catch (e) {
+    } catch (e: any) {
         if (e.toString().indexOf("TEST FAIL") !== -1) {
             logfn(`--- FAIL - Expected error not encountered: ${e}`);
             throw e;
