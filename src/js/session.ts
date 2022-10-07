@@ -16,7 +16,7 @@ export class Session {
         this.TP = '';
     }
     public clear() {
-        this.TP = '';
+        this.TP = ''; // FIXME set this to null, and make optional in type
     }
 
     public get token(): string {

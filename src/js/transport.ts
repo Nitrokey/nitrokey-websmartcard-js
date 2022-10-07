@@ -268,7 +268,7 @@ async function _send_command(token: Session, cmd: WEBCRYPT_CMD, data: any = {}, 
   data = dict_binval(data);
   if (VERBOSE) log_message_library(`send_command, cmd:${cmd}, data:`, data);
 
-  console.log("final data sent", data);
+  if (VERBOSE) log_message_library("final data sent", data);
   data = cbor_encode(data);
   try {
     await lib_delay(100);

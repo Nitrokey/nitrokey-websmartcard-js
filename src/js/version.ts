@@ -5,4 +5,4 @@
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 
-export const JS_API_VERSION = 'v0.1';
+export const JS_API_VERSION = 'v0.2';
