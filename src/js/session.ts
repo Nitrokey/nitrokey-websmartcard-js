@@ -46,15 +46,15 @@ export class Session {
     public authorize(data: any) {
         log_message_library(`Auth token '${this.TP.slice(0,4).toString()}' valid for the next ${this.timeLeft().toFixed(1)} seconds`);
         if (!this.valid()) {
-            if (this.validUntil !== 0) console.warn('Temporary authorization token is not valid anymore. Clearing state.');
+            console.warn('Temporary authorization token is not valid anymore. Clearing state.');
             this.clear();
+            return data;
         }
         if (!data){
             data = {};
         }
 
-        // data['TP'] = this.TP;
-        data['TP'] = new Uint8Array(4);
+        data['TP'] = this.TP;
         return data;
     }
 
