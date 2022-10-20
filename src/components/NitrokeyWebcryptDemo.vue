@@ -49,7 +49,7 @@
         <button @click="logout" :disabled="!logged_in">LOGOUT</button>
         <button @click="generateKey" :disabled="!logged_in">GENERATE KEY</button>
         <button @click="WebcryptTests">TEST</button>
-        <button @click="openpgpTests">OpenPGP</button>
+<!--        <button @click="openpgpTests">OpenPGP</button>-->
 
       </div>
 
