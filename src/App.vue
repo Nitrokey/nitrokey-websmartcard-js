@@ -1,6 +1,6 @@
 <template>
   <div id="app">
-    <NitrokeyWebcryptDemo msg="Nitrokey Webcrypt Demo"/>
+    <NitrokeyWebcryptDemo msg="Nitrokey WebSmartCard Demo"/>
   </div>
 </template>
 
