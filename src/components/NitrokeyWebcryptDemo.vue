@@ -2,34 +2,67 @@
   <div class="hello">
     <h1>{{ msg }}</h1>
 
-    <p></p>
-
+    <b-alert show>Note: this demo application does not represent the final state of the product. <br/>
+      Notably, there are still some performance improvements planned, which will decrease the WebAuthn popups count. <br/>
+      Note: it's been reported that this web application does not work on Microsoft Windows 10.
+    </b-alert>
 
     <b-container fluid="md">
       <div>
-        <!--      model -->
+        <h2>Step 1: Log in</h2>
+
+        <b-button id="btnReset" @click="login">RESET WEBSMARTCARD AND LOGIN</b-button>
+        <b-popover target="btnReset" triggers="hover" placement="top">
+          <template #title>Reset WebSmartCard and Login</template>
+          Run a factory reset, initialize WebSmartCard with a random seed and login.
+          The reset operation is limited only to the WebSmartCard application, and does not remove any other user data.
+        </b-popover>
+
+        <h2>Step 2: Generate Key</h2>
         <div>
           <b-form-group
               id="fieldset-3"
-              description="Public key to be sent to the recipient"
+              description=""
               label="Key seed"
               label-for="input-3"
               valid-feedback="Thank you!"
           >
-            <b-form-input id="input-3" v-model="KEYSEED" placeholder="Enter data after which a key will be generated, e.g. passphrase" trim ></b-form-input>
-            <b-form-input id="input-4" v-model="keyseedHash" placeholder="KEYSEED" trim ></b-form-input>
-            <button @click="generateKeyFromData" :disabled="!logged_in">GENERATE KEY FROM SEED</button>
+            <b-form-input id="input-3" v-model="KEYSEED"
+                          placeholder="Enter data after which a key will be generated, e.g. a 7 word passphrase"
+                          trim></b-form-input>
+            <b-form-input id="input-4" v-model="keyseedHash" placeholder="KEYSEED" trim></b-form-input>
+            <br/>
+            <b-button id="btnGenerate" @click="generateKeyFromData" :disabled="!logged_in">GENERATE KEY FROM USER
+              INPUT
+            </b-button>
+            <b-popover target="btnGenerate" triggers="hover" placement="top">
+              <template #title>Generate new key from seed</template>
+              Generate a new derived key, based on the provided seed.
+              This key is never stored on the device.
+              It can be restored either from the user-supplied seed or from the resulting keyhandle.
+            </b-popover>
+            or
+            <b-button id="btnGenerateRandom" @click="generateKey" :disabled="!logged_in">GENERATE RANDOM KEY</b-button>
+            <b-popover target="btnGenerateRandom" triggers="hover" placement="top">
+              <template #title>Generate new key</template>
+              Generate a new key randomly.
+              This key is never stored on the device.
+              It can be restored only from the resulting keyhandle.
+              The keyhandle can be safely stored in a text file or any secure web service for future restoration and usage.
+            </b-popover>
           </b-form-group>
 
+          <h2>Result</h2>
           <b-form-group
               id="fieldset-1"
               description="Current key data"
-              label="Keyhandle for the internal use"
+              label="Keyhandle for the internal use/store"
               label-for="input-1"
               valid-feedback="Correct keyhandle"
               :state="state"
           >
-            <b-form-input id="input-1" v-model="KEYHANDLE" :state="state" placeholder="KEYHANDLE" trim disabled></b-form-input>
+            <b-form-input id="input-1" v-model="KEYHANDLE" :state="state" placeholder="KEYHANDLE" trim
+                          disabled></b-form-input>
           </b-form-group>
 
           <b-form-group
@@ -42,17 +75,10 @@
             <b-form-input id="input-2" v-model="PUBKEY" placeholder="PUBKEY" trim disabled></b-form-input>
           </b-form-group>
 
-
         </div>
-
-        <button @click="login">RESET AND LOGIN</button>
-        <button @click="logout" :disabled="!logged_in">LOGOUT</button>
-        <button @click="generateKey" :disabled="!logged_in">GENERATE KEY</button>
-        <button @click="WebcryptTests">TEST</button>
-<!--        <button @click="openpgpTests">OpenPGP</button>-->
-
       </div>
 
+      <h2>Step 3: Operation</h2>
       <div>
         <b-tabs content-class="mt-3" v-model="active_tab">
           <b-tab title="Sign" active>
@@ -66,7 +92,7 @@
 
           </b-tab>
           <b-tab title="Encrypt">
-            <p>Data encryption (run without device)</p>
+            <p>Data encryption (run in browser using public key from keyhandle)</p>
 
             <b-form-input v-model="encryptText" placeholder="Enter data to encrypt"></b-form-input>
             <b-form-textarea
@@ -91,37 +117,59 @@
 
             <b-form-input v-model="decryptText" placeholder="Here decrypted data will be presented" disabled></b-form-input>
             <button @click="decryptData" :disabled="!logged_in || !KEYHANDLE">DECRYPT DATA</button>
-
-
           </b-tab>
-          <!--          <b-tab title="Test"><p>Test and status</p></b-tab>-->
 
           <b-tab title="Custom">
             <p>Custom commands</p>
+
             <b-form id="custom_cmd_form" @submit="execute_custom_command" @submit.stop.prevent>
               <b-form-select v-model="selected" :options="commands"/>
 
+
               <div v-for="p of params">
-                <b-form-input :placeholder=p.placeholder :name=p.name
-                              v-model="custom_cmd_form[p.name]"></b-form-input>
+                <b-input-group :prepend="p.placeholder" class="mt-3">
+                  <b-form-input v-model="custom_cmd_form[p.name]"></b-form-input>
+                </b-input-group>
               </div>
-<!--            <button @click="execute_custom_command">Execute</button>-->
-              <b-button type="submit" variant="primary">Execute</b-button>
+
+              <b-input-group prepend="Session Token" class="mt-3">
+                <b-form-input v-model="logged_in" trim disabled></b-form-input>
+              </b-input-group>
+
+              <b-button type="submit" variant="primary" class="mt-3">Execute</b-button>
             </b-form>
-            <div style="word-wrap: anywhere; text-align: center; position: center">
-              Parameters: {{ JSON.stringify(custom_cmd_form) }}
+
+            <b-input-group prepend="Execution Status" class="mt-3">
+              <b-form-input v-model="custom_cmd_form_reply_status" disabled></b-form-input>
+            </b-input-group>
+
+
+<!--            TODO: handle boolean value for the status unlocked result -->
+            <div v-for="(value, key) of custom_cmd_form_reply_obj">
+
+              <b-input-group :prepend="key" class="mt-3">
+                <b-form-input v-model="custom_cmd_form_reply_obj[key]" disabled></b-form-input>
+              </b-input-group>
+
             </div>
-            <div style="word-wrap: anywhere; text-align: center; position: center">
-              Reply: {{custom_cmd_form_reply}}
-            </div>
+
           </b-tab>
+
+          <b-modal ref="my-modal" hide-footer centered>
+            <div class="d-block text-center">
+              <h3>Executing command, please wait</h3>
+            </div>
+          </b-modal>
 
           <b-tab title="Console">
             <p>Console data</p>
 
-            <!--            <b-progress :value="value" :max="max" show-progress animated></b-progress>-->
             <button @click="clear_console">Clear</button>
-            <b-progress-bar v-model="progress.value" :max="progress.max" variant="success" show-progress show-value></b-progress-bar>
+
+
+<!--            Progress bar for the test execution (currently disabled)-->
+            <b-progress-bar v-model="progress.value" :max="progress.max" variant="success" show-progress
+                            show-value></b-progress-bar>
             <b-form-textarea
                 id="console"
                 placeholder="Enter something..."
@@ -130,8 +178,34 @@
                 max-rows="12"
             ></b-form-textarea>
 
+
           </b-tab>
+
+          <b-tab title="Help">
+            <ol>
+              <li>
+                SET_PIN command can only be executed once during the working lifecycle. Subsequent PIN changes must be done using the CHANGE_PIN command.
+              </li>
+              <li>
+                After setting the PIN, users need to log in to access the commands with the LOGIN command, which assigns a session token.
+              </li>
+              <li>
+                To invalidate the session token, users can use the LOGOUT command.
+              </li>
+            </ol>
+          </b-tab>
+
         </b-tabs>
+
+        <h2>Step 4: Finish working with the device</h2>
+        <b-button id="btnLogout" @click="logout" :disabled="!logged_in">LOGOUT</b-button>
+        <b-popover target="btnLogout" triggers="hover" placement="top">
+          <template #title>Logout</template>
+          Ask device to invalidate the session token, and remove all unencrypted WebSmartCard secrets from
+          the device's RAM memory.
+        </b-popover>
+
+
       </div>
     </b-container>
 
@@ -170,7 +244,8 @@ import {Session} from "@/js/session";
 import {Dictionary} from "@/js/types";
 import {log_fn} from "@/js/logs";
 import {WebcryptTests} from "@/js/tests";
-import {openpgpTests_ext} from "@/js/openpgp_tests";
+
+// import {openpgpTests_ext} from "@/js/openpgp_tests";
 
 
 function keys_to_options(keys_list: any): any {
@@ -201,6 +276,8 @@ export default class NitrokeyWebcryptDemo extends Vue {
   commands = keys_to_options(keys(commands_parameters));
   custom_cmd_form = {};
   custom_cmd_form_reply = "";
+  custom_cmd_form_reply_status = "";
+  custom_cmd_form_reply_obj = {};
   active_tab = 0;
   progress = {value: 0, max: 100};
   logged_in = "";
@@ -210,7 +287,11 @@ export default class NitrokeyWebcryptDemo extends Vue {
   SignatureCorrect = "not verified";
 
   get params() {
-    if (this.selected === null) {
+    this.custom_cmd_form_reply = "";
+    this.custom_cmd_form_reply_status = "";
+    this.custom_cmd_form_reply_obj = {};
+
+    if (this.selected.length === 0) {
       return [];
     }
     this.custom_cmd_form = {};
@@ -258,16 +339,30 @@ export default class NitrokeyWebcryptDemo extends Vue {
     return "not correct";
   }
 
-  get state(){
+  get state() {
     // when it passed validation
     return this.KEYHANDLE != "";
     // return false;
   }
 
+  hideModal() {
+    this.$refs['my-modal'].hide()
+  }
 
   async log_console(s: string): Promise<void> {
     console.log(s);
     this.console += `${s}\n`
+
+    // Quick UI hack to show modal window for the time of command processing
+    if (s.indexOf("Attempting to run command") !== -1) {
+      // Starting
+      this.$refs['my-modal'].show()
+    } else if (s.indexOf("executed successfully") !== -1
+        || s.indexOf("Error: ") !== -1) {
+      // Finished
+      this.$refs['my-modal'].hide()
+    }
+
     return Promise.resolve();
   }
 
@@ -279,8 +374,9 @@ export default class NitrokeyWebcryptDemo extends Vue {
 
   async login(): Promise<void> {
     await Webcrypt_FactoryReset(this.log_console);
-    await Webcrypt_SetPin(this.log_console, new CommandSetPinParams('123123'));
-    const res = await Webcrypt_Login(this.log_console, new CommandLoginParams('123123'));
+    const DEFAULT_PIN = '123456';
+    await Webcrypt_SetPin(this.log_console, new CommandSetPinParams(DEFAULT_PIN));
+    const res = await Webcrypt_Login(this.log_console, new CommandLoginParams(DEFAULT_PIN));
     this.logged_in = res.TP;
   }
 
@@ -327,7 +423,7 @@ export default class NitrokeyWebcryptDemo extends Vue {
 
   async execute_custom_command(event: Event) {
     event.preventDefault();
-    if (this.selected === null) return;
+    if (this.selected.length === 0) return;
     this.custom_cmd_form_reply = "PENDING";
     const command = string_to_command[this.selected];
 
@@ -337,20 +433,31 @@ export default class NitrokeyWebcryptDemo extends Vue {
 
     let res: Dictionary|null = null;
     const session = new Session();
+    session.token = this.logged_in;
     try {
-      res = await send_command(session, command, data_to_send, log_fn);
+      res = await send_command(session, command, data_to_send, this.log_console); // log_fn
+      if (this.selected === "LOGIN") {
+        this.logged_in = res.TP;
+      }
+
     } catch (e) {
       this.custom_cmd_form_reply = `Error: ${JSON.stringify(e)}`;
+      this.custom_cmd_form_reply_status = `Error: ${JSON.stringify(e)}`;
       return;
     }
 
+
     let hrres = "OK";
+    let hrres_o = {};
     if (!dict_empty(<Dictionary>res)) {
       if (res) {
         hrres = JSON.stringify(dict_hexval(res));
+        hrres_o = dict_hexval(res);
+        this.custom_cmd_form_reply_status = "OK";
       }
     }
     this.custom_cmd_form_reply = hrres;
+    this.custom_cmd_form_reply_obj = hrres_o;
   }
 
 
@@ -379,12 +486,12 @@ export default class NitrokeyWebcryptDemo extends Vue {
 
   }
 
-  async openpgpTests(): Promise<void> {
-    await openpgpTests_ext(this.log_console);
-  }
+  // async openpgpTests(): Promise<void> {
+  //   await openpgpTests_ext(this.log_console);
+  // }
 
 
-  }
+}
 </script>
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
@@ -393,14 +500,18 @@ h3 {
   margin: 40px 0 0;
 }
 
+h2 {
+  margin: 40px 20px 20px;
+}
+
 ul {
   list-style-type: none;
   padding: 0;
 }
 
 li {
-  display: inline-block;
   margin: 0 10px;
+  text-align: justify;
 }
 
 a {
